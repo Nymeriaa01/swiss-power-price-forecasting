@@ -88,6 +88,18 @@ MAE by year: 2024 / 2025 / 2026 = 15.1 / 12.8 / 20.4 (naive) and
 - Errors peak at midday: that is when solar output, and so the weather
   forecast, sets the price, including negative prices on sunny weekends.
 
+**Calibration window.** Re-running everything with a 1-year instead of a
+2-year rolling window (`python scripts/02_run_forecasts.py --calib-days 365`):
+
+| Ensemble MAE | 2024 | 2025 | 2026 | All |
+|---|---:|---:|---:|---:|
+| 1-year window | 10.11 | 9.05 | 13.67 | 10.69 |
+| 2-year window | 10.16 | 8.82 | 13.43 | 10.57 |
+
+The short window is marginally better only in 2024, when the 2-year window
+still contains the 2022 crisis; afterwards the extra year of data wins. The
+gap is small, so the conclusions do not depend on this choice.
+
 ![Example week](reports/figures/02_example_week.png)
 
 ![MAE by hour](reports/figures/03_mae_by_hour.png)
@@ -151,7 +163,8 @@ SHAP values of the LightGBM model refitted on the last 2 years:
 - [ ] Add ENTSO-E load and wind/solar forecasts as inputs
 - [ ] Probabilistic forecasts (quantile regression) and a risk-aware storage schedule
 - [ ] Hydro reservoir filling level (SFOE weekly data) as a seasonal feature
-- [ ] Compare the 2-year rolling window with shorter windows around regime changes
+- [x] Compare 1-year and 2-year rolling windows
+- [ ] Weight recent days more (or combine several windows) around regime changes
 
 ## Reproduce
 
