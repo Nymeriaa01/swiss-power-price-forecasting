@@ -31,3 +31,13 @@ def test_perfect_foresight_never_loses():
         p = rng.normal(80, 40, 24)
         c, d = trading.schedule(p, **ASSET)
         assert trading.daily_pnl(p, c, d, ASSET["cost_eur_per_mwh"]) >= -1e-6
+
+
+def test_no_simultaneous_charge_and_discharge():
+    # Deeply negative prices used to make the plain LP charge and discharge
+    # in the same hour to dump energy through the efficiency losses.
+    p = np.full(24, 40.0)
+    p[10:16] = -300.0
+    p[19:21] = 120.0
+    c, d = trading.schedule(p, **ASSET)
+    assert not ((c > 1e-6) & (d > 1e-6)).any()

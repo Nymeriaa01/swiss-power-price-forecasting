@@ -1,6 +1,7 @@
 """Using the forecasts: day-ahead scheduling of a small storage asset.
 
-Each day, the asset is scheduled on the *forecast* prices (linear program),
+Each day, the asset is scheduled on the *forecast* prices (mixed-integer
+linear program),
 then the schedule is settled at the *actual* day-ahead prices. Comparing with
 perfect foresight tells how much of the available spread a forecast captures.
 
@@ -10,7 +11,7 @@ still pick the wrong hours.
 """
 import numpy as np
 import pandas as pd
-from scipy.optimize import linprog
+from scipy.optimize import Bounds, LinearConstraint, milp
 
 from . import config
 
@@ -18,35 +19,56 @@ from . import config
 def schedule(prices, power_mw, energy_mwh, round_trip_eff, cost_eur_per_mwh):
     """Optimal charge/discharge plan for one day given a price vector.
 
-    Variables: charge c_t, discharge d_t, state of charge s_t (t = 0..T-1).
+    Variables: charge c_t, discharge d_t, state of charge s_t and a binary
+    mode u_t (1 = charging) for t = 0..T-1.
     s_t = s_{t-1} + eta * c_t - d_t / eta, empty at the start of the day,
     at most one full cycle per day.
+
+    The binary is needed: with a pure LP, at negative prices the optimiser
+    charges and discharges in the same hour to "burn" energy through the
+    efficiency losses and get paid for it, which a real asset cannot do.
     """
     p = np.asarray(prices, dtype=float)
     T = len(p)
     eta = np.sqrt(round_trip_eff)
-    # x = [c (T), d (T), s (T)], linprog minimises
-    cost = np.concatenate([p, -p + cost_eur_per_mwh, np.zeros(T)])
+    n = 4 * T
+    c_, d_, s_, u_ = (slice(k * T, (k + 1) * T) for k in range(4))
 
-    A_eq = np.zeros((T, 3 * T))
+    # x = [c, d, s, u], milp minimises
+    cost = np.zeros(n)
+    cost[c_] = p
+    cost[d_] = -p + cost_eur_per_mwh
+
+    soc = np.zeros((T, n))
     for t in range(T):
-        A_eq[t, t] = -eta
-        A_eq[t, T + t] = 1 / eta
-        A_eq[t, 2 * T + t] = 1
+        soc[t, c_.start + t] = -eta
+        soc[t, d_.start + t] = 1 / eta
+        soc[t, s_.start + t] = 1
         if t > 0:
-            A_eq[t, 2 * T + t - 1] = -1
-    b_eq = np.zeros(T)
+            soc[t, s_.start + t - 1] = -1
 
-    A_ub = np.zeros((1, 3 * T))
-    A_ub[0, T:2 * T] = 1  # total discharge <= one cycle
-    b_ub = [energy_mwh]
+    cycle = np.zeros((1, n))
+    cycle[0, d_] = 1
 
-    bounds = [(0, power_mw)] * (2 * T) + [(0, energy_mwh)] * T
-    res = linprog(cost, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+    mode = np.zeros((2 * T, n))
+    for t in range(T):
+        mode[t, c_.start + t] = 1                  # c_t <= P * u_t
+        mode[t, u_.start + t] = -power_mw
+        mode[T + t, d_.start + t] = 1              # d_t <= P * (1 - u_t)
+        mode[T + t, u_.start + t] = power_mw
+
+    constraints = [
+        LinearConstraint(soc, 0, 0),
+        LinearConstraint(cycle, 0, energy_mwh),
+        LinearConstraint(mode, -np.inf, np.r_[np.zeros(T), np.full(T, power_mw)]),
+    ]
+    upper = np.r_[np.full(2 * T, power_mw), np.full(T, energy_mwh), np.ones(T)]
+    integrality = np.r_[np.zeros(3 * T), np.ones(T)]
+
+    res = milp(cost, constraints=constraints, bounds=Bounds(np.zeros(n), upper), integrality=integrality)
     if not res.success:
         raise RuntimeError(res.message)
-    c, d = res.x[:T], res.x[T:2 * T]
-    return c, d
+    return res.x[c_], res.x[d_]
 
 
 def daily_pnl(actual, c, d, cost_eur_per_mwh):

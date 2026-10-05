@@ -107,17 +107,17 @@ gap is small, so the conclusions do not depend on this choice.
 ### Value: scheduling a storage asset
 
 A 1 MW / 2 MWh asset (85 % round-trip efficiency, 5 EUR/MWh wear cost, at most
-one cycle per day) is scheduled each day by a linear program on the forecast
-prices, then settled at the actual prices. Perfect foresight gives the upper
+one cycle per day) is scheduled each day by a mixed-integer linear program on
+the forecast prices, then settled at the actual prices. Perfect foresight gives the upper
 bound.
 
 | Schedule based on | P&L (EUR) | Share of perfect foresight | Losing days | Max drawdown (EUR) |
 |---|---:|---:|---:|---:|
-| perfect foresight | 116,481 | 100 % | 0 % | 0 |
-| naive | 99,336 | 85.3 % | 9.0 % | -66 |
-| lear | 105,503 | 90.6 % | 10.1 % | -74 |
-| gbm | 105,987 | 91.0 % | 8.6 % | -65 |
-| **ensemble** | **107,183** | **92.0 %** | 8.9 % | -71 |
+| perfect foresight | 116,438 | 100 % | 0 % | 0 |
+| naive | 99,357 | 85.3 % | 9.0 % | -66 |
+| lear | 105,472 | 90.6 % | 10.1 % | -74 |
+| gbm | 105,972 | 91.0 % | 8.6 % | -65 |
+| **ensemble** | **107,149** | **92.0 %** | 8.9 % | -71 |
 
 (1,004 days, 1 MW / 2 MWh. Annualised Sharpe ratios are around 18 for every
 strategy and are not very informative here: a storage asset with a daily spread
@@ -190,7 +190,7 @@ src/swisspower/
     models.py      LEAR and LightGBM
     backtest.py    walk-forward loop
     metrics.py     MAE, rMAE, sMAPE, Diebold-Mariano
-    trading.py     storage LP and P&L metrics
+    trading.py     storage scheduling (MILP) and P&L metrics
     plots.py
 scripts/           the four steps above
 tests/             look-ahead test, DST handling, storage LP
